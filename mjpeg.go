@@ -152,6 +152,32 @@ func New(aviFile string, width, height, fps int32) (awr AviWriter, err error) {
 	wstr, wint32, wint16, wLenF, finalizeLenF :=
 		aw.writeStr, aw.writeInt32, aw.writeInt16, aw.writeLengthField, aw.finalizeLengthField
 
+	// AVI container format:
+	// 	RIFF ('AVI '
+	// 	LIST ('hdrl'
+	// 		  'avih'(<Main AVI Header>)
+	// 		  LIST ('strl'
+	// 				'strh'(<Stream header>)
+	// 				'strf'(<Stream format>)
+	// 				[ 'strd'(<Additional header data>) ]
+	// 				[ 'strn'(<Stream name>) ]
+	// 				...
+	// 			   )
+	// 		   ...
+	// 		 )
+	// 	LIST ('movi'
+	// 		  {SubChunk | LIST ('rec '
+	// 							SubChunk1
+	// 							SubChunk2
+	// 							...
+	// 						   )
+	// 			 ...
+	// 		  }
+	// 		  ...
+	// 		 )
+	// 	['idx1' (<AVI Index>) ]
+	//    )
+
 	// Write AVI header
 	wstr("RIFF")          // RIFF type
 	wLenF()               // File length (remaining bytes after this field) (nesting level 0)
@@ -181,7 +207,7 @@ func New(aviFile string, width, height, fps int32) (awr AviWriter, err error) {
 	wstr("LIST") // LIST chunk: stream headers
 	wLenF()      // Chunk size (nesting level 2)
 	wstr("strl") // LIST chunk type: stream list
-	wstr("strh") // Stream header
+	wstr("strh") // Stream header chunk
 	wint32(56)   // Length of the strh sub-chunk
 	wstr("vids") // fccType - type of data stream - here 'vids' for video stream
 	wstr("MJPG") // MJPG for Motion JPEG
@@ -200,7 +226,7 @@ func New(aviFile string, width, height, fps int32) (awr AviWriter, err error) {
 	wint16(0)  //   ..top
 	wint16(0)  //   ..right
 	wint16(0)  //   ..bottom
-	// end of 'strh' chunk, stream format follows
+	// end of 'strh' chunk, stream format chunk follows
 	wstr("strf")               // stream format chunk
 	wLenF()                    // Chunk size (nesting level 3)
 	wint32(40)                 // biSize, write header size of BITMAPINFO header structure; applications should use this size to determine which BITMAPINFO header structure is being used, this size includes this biSize field
@@ -215,7 +241,7 @@ func New(aviFile string, width, height, fps int32) (awr AviWriter, err error) {
 	wint32(0)                  // biClrUsed (color table size; for 8-bit only)
 	wint32(0)                  // biClrImportant, specifies that the first x colors of the color table (0: all the colors are important, or, rather, their relative importance has not been computed)
 	finalizeLenF()             //'strf' chunk finished (nesting level 3)
-
+	// Optional stream name chunk
 	wstr("strn") // Use 'strn' to provide a zero terminated text string describing the stream
 	name := "Created with https://github.com/icza/mjpeg" +
 		" at " + time.Now().Format("2006-01-02 15:04:05 MST")
