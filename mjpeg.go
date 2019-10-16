@@ -243,8 +243,7 @@ func New(aviFile string, width, height, fps int32) (awr AviWriter, err error) {
 	finalizeLenF()             //'strf' chunk finished (nesting level 3)
 	// Optional stream name chunk
 	wstr("strn") // Use 'strn' to provide a zero terminated text string describing the stream
-	name := "Created with https://github.com/icza/mjpeg" +
-		" at " + time.Now().Format("2006-01-02 15:04:05 MST")
+	name := "Created for ReconEyez @ " + time.Now().Format("2006-01-02 15:04:05 MST")
 	// Name must be 0-terminated and stream name length (the length of the chunk) must be even
 	if len(name)&0x01 == 0 {
 		name = name + " \000" // padding space plus terminating 0
