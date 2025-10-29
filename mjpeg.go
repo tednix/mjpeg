@@ -1,44 +1,43 @@
 /*
-
 Package mjpeg contains an MJPEG video format writer.
 
-Examples
+# Examples
 
 Let's see an example how to turn the JPEG files 1.jpg, 2.jpg, ..., 10.jpg into a movie file:
 
-    checkErr := func(err error) {
-        if err != nil {
-            panic(err)
-        }
-    }
+	checkErr := func(err error) {
+	    if err != nil {
+	        panic(err)
+	    }
+	}
 
-    // Video size: 200x100 pixels, FPS: 2
-    aw, err := mjpeg.New("test.avi", 200, 100, 2)
-    checkErr(err)
+	// Video size: 200x100 pixels, FPS: 2
+	aw, err := mjpeg.New("test.avi", 200, 100, 2)
+	checkErr(err)
 
-    // Create a movie from images: 1.jpg, 2.jpg, ..., 10.jpg
-    for i := 1; i <= 10; i++ {
-        data, err := ioutil.ReadFile(fmt.Sprintf("%d.jpg", i))
-        checkErr(err)
-        checkErr(aw.AddFrame(data))
-    }
+	// Create a movie from images: 1.jpg, 2.jpg, ..., 10.jpg
+	for i := 1; i <= 10; i++ {
+	    data, err := ioutil.ReadFile(fmt.Sprintf("%d.jpg", i))
+	    checkErr(err)
+	    checkErr(aw.AddFrame(data))
+	}
 
-    checkErr(aw.Close())
+	checkErr(aw.Close())
 
 Example to add an image.Image as a frame to the video:
 
-    aw, err := mjpeg.New("test.avi", 200, 100, 2)
-    checkErr(err)
+	aw, err := mjpeg.New("test.avi", 200, 100, 2)
+	checkErr(err)
 
-    var img image.Image
-    // Acquire / initialize image, e.g.:
-    // img = image.NewRGBA(image.Rect(0, 0, 200, 100))
+	var img image.Image
+	// Acquire / initialize image, e.g.:
+	// img = image.NewRGBA(image.Rect(0, 0, 200, 100))
 
-    buf := &bytes.Buffer{}
-    checkErr(jpeg.Encode(buf, img, nil))
-    checkErr(aw.AddFrame(buf.Bytes()))
+	buf := &bytes.Buffer{}
+	checkErr(jpeg.Encode(buf, img, nil))
+	checkErr(aw.AddFrame(buf.Bytes()))
 
-    checkErr(aw.Close())
+	checkErr(aw.Close())
 */
 package mjpeg
 
@@ -179,26 +178,26 @@ func New(aviFile string, width, height, fps int32) (awr AviWriter, err error) {
 	//    )
 
 	// Write AVI header
-	wstr("RIFF")          // RIFF type
-	wLenF()               // File length (remaining bytes after this field) (nesting level 0)
-	wstr("AVI ")          // AVI signature
-	wstr("LIST")          // LIST chunk: data encoding
-	wLenF()               // Chunk length (nesting level 1)
-	wstr("hdrl")          // LIST chunk type
-	wstr("avih")          // avih sub-chunk
-	wint32(0x38)          // Sub-chunk length excluding the first 8 bytes of avih signature and size
-	wint32(1000000 / fps) // Frame delay time in microsec
-	wint32(0)             // dwMaxBytesPerSec (maximum data rate of the file in bytes per second)
-	wint32(0)             // Reserved
-	wint32(0x10)          // dwFlags, 0x10 bit: AVIF_HASINDEX (the AVI file has an index chunk at the end of the file - for good performance); Windows Media Player can't even play it if index is missing!
+	wstr("RIFF")                            // RIFF type
+	wLenF()                                 // File length (remaining bytes after this field) (nesting level 0)
+	wstr("AVI ")                            // AVI signature
+	wstr("LIST")                            // LIST chunk: data encoding
+	wLenF()                                 // Chunk length (nesting level 1)
+	wstr("hdrl")                            // LIST chunk type
+	wstr("avih")                            // avih sub-chunk
+	wint32(0x38)                            // Sub-chunk length excluding the first 8 bytes of avih signature and size
+	wint32(int32(1000000.0 / float64(fps))) // Frame delay time in microseconds (dwMicroSecPerFrame)
+	wint32(width * height * 3 * fps / 8)    // dwMaxBytesPerSec (estimated maximum data rate in bytes per second)
+	wint32(0)                               // Reserved
+	wint32(0x10)                            // dwFlags, 0x10 bit: AVIF_HASINDEX (the AVI file has an index chunk at the end of the file - for good performance); Windows Media Player can't even play it if index is missing!
 	aw.framesCountFieldPos = aw.currentPos()
-	wint32(0)      // Number of frames
-	wint32(0)      // Initial frame for non-interleaved files; non interleaved files should set this to 0
-	wint32(1)      // Number of streams in the video; here 1 video, no audio
-	wint32(0)      // dwSuggestedBufferSize
-	wint32(width)  // Image width in pixels
-	wint32(height) // Image height in pixels
-	wint32(0)      // Reserved
+	wint32(0)                      // Number of frames
+	wint32(0)                      // Initial frame for non-interleaved files; non interleaved files should set this to 0
+	wint32(1)                      // Number of streams in the video; here 1 video, no audio
+	wint32(width * height * 3 / 2) // dwSuggestedBufferSize (reasonable buffer size for MJPEG frames)
+	wint32(width)                  // Image width in pixels
+	wint32(height)                 // Image height in pixels
+	wint32(0)                      // Reserved
 	wint32(0)
 	wint32(0)
 	wint32(0)
@@ -218,14 +217,14 @@ func New(aviFile string, width, height, fps int32) (awr AviWriter, err error) {
 	wint32(fps)  // dwRate, Frame rate for video streams (the actual FPS is calculated by dividing this by dwScale)
 	wint32(0)    // usually zero
 	aw.framesCountFieldPos2 = aw.currentPos()
-	wint32(0)  // dwLength, playing time of AVI file as defined by scale and rate (set equal to the number of frames)
-	wint32(0)  // dwSuggestedBufferSize for reading the stream (typically, this contains a value corresponding to the largest chunk in a stream)
-	wint32(-1) // dwQuality, encoding quality given by an integer between (0 and 10,000.  If set to -1, drivers use the default quality value)
-	wint32(0)  // dwSampleSize, 0 means that each frame is in its own chunk
-	wint16(0)  // left of rcFrame if stream has a different size than dwWidth*dwHeight(unused)
-	wint16(0)  //   ..top
-	wint16(0)  //   ..right
-	wint16(0)  //   ..bottom
+	wint32(0)                      // dwLength, playing time of AVI file as defined by scale and rate (set equal to the number of frames)
+	wint32(width * height * 3 / 2) // dwSuggestedBufferSize for reading the stream (should match main header or be larger)
+	wint32(-1)                     // dwQuality, encoding quality given by an integer between (0 and 10,000.  If set to -1, drivers use the default quality value)
+	wint32(0)                      // dwSampleSize, 0 means that each frame is in its own chunk
+	wint16(0)                      // left of rcFrame if stream has a different size than dwWidth*dwHeight(unused)
+	wint16(0)                      //   ..top
+	wint16(0)                      //   ..right
+	wint16(0)                      //   ..bottom
 	// end of 'strh' chunk, stream format chunk follows
 	wstr("strf")               // stream format chunk
 	wLenF()                    // Chunk size (nesting level 3)
@@ -364,8 +363,7 @@ func (aw *aviWriter) AddFrame(jpegData []byte) error {
 		return ErrTooLarge
 	}
 
-	aw.frames++
-
+	// Write frame chunk with proper formatting
 	aw.writeInt32(0x63643030) // "00dc" compressed frame
 	aw.writeLengthField()     // Chunk length (nesting level 2)
 	if aw.err == nil {
@@ -373,11 +371,18 @@ func (aw *aviWriter) AddFrame(jpegData []byte) error {
 	}
 	aw.finalizeLengthField() // "00dc" chunk finished (nesting level 2)
 
-	// Write index data
+	// Ensure chunk is aligned to even byte boundary (AVI requirement)
+	if aw.currentPos()&1 != 0 {
+		aw.writeStr("\000") // Add padding byte if needed
+	}
+
+	// Write index data with proper flags and timing
 	aw.writeIdxInt32(0x63643030)                   // "00dc" compressed frame
-	aw.writeIdxInt32(0x10)                         // flags: select AVIIF_KEYFRAME (The flag indicates key frames in the video sequence. Key frames do not need previous video information to be decompressed.)
-	aw.writeIdxInt32(int32(framePos - aw.moviPos)) // offset to the chunk, offset can be relative to file start or 'movi'
-	aw.writeIdxInt32(int32(len(jpegData)))         // length of the chunk
+	aw.writeIdxInt32(0x10)                         // flags: AVIIF_KEYFRAME (all MJPEG frames are keyframes)
+	aw.writeIdxInt32(int32(framePos - aw.moviPos)) // offset to the chunk (relative to 'movi' start)
+	aw.writeIdxInt32(int32(len(jpegData)))         // length of the chunk data
+
+	aw.frames++
 
 	return aw.err
 }
